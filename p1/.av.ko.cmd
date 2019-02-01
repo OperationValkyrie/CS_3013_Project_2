@@ -1,0 +1,1 @@
+cmd_/home/jon/Desktop/CS_3011/Project_2/p1/av.ko := ld -r -m elf_i386 -T ./scripts/module-common.lds --build-id  -o /home/jon/Desktop/CS_3011/Project_2/p1/av.ko /home/jon/Desktop/CS_3011/Project_2/p1/av.o /home/jon/Desktop/CS_3011/Project_2/p1/av.mod.o
