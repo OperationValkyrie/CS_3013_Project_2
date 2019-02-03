@@ -12,12 +12,14 @@
 int main(int argc, char **argv) {
     if(argc == 1) {
         unsigned short pid = getpid();
-        printf("PID:%d %30s %ld\n", pid, "Return Code from procAncestry", getAncestry(pid));
+        long result = getAncestry(pid);
+        printf("PID:%d %30s %ld\n", pid, "Return Code from procAncestry", result);
     } else {
         int i;
         for(i = 1; i < argc; i++) {
             unsigned short pid = atoi(argv[i]);
-            printf("PID:%d %30s %ld\n", pid, "Return Code from procAncestry", getAncestry(pid));
+            long result = getAncestry(pid);
+            printf("PID:%d %30s %ld\n", pid, "Return Code from procAncestry", result);
         }
     }
     return 0;
@@ -27,9 +29,6 @@ long getAncestry(unsigned short pid) {
     struct ancestry *data;
     data = malloc(sizeof(struct ancestry));
     clearAncestry(data);
-    printArray(data->ancestors, 10, pid, "Ancestor");
-    printArray(data->siblings, 100, pid, "Sibling");
-    printArray(data->children, 100, pid, "Children");
     long result = syscall(__NR_procAncestry, &pid, data);
     printArray(data->ancestors, 10, pid, "ancestor");
     printArray(data->siblings, 100, pid, "sibling");

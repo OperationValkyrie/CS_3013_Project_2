@@ -1,6 +1,5 @@
 #include <asm/current.h>
 #include <asm/errno.h>
-//#include <asm-generic/uaccess.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/module.h>
@@ -24,16 +23,29 @@ asmlinkage long new_sys_cs3013_syscall1(void) {
   return 0;
 }
 
-static void readChildren(pid_t list[100], struct list_head *head) {
-  struct list_head *position;
-  int i = 0;
-  list_for_each(position, head) {
-    struct task_struct *task = list_entry(position, struct task_struct, children);
-    list[i++] = task->pid;
+/**
+ * Interates through the circular task list to find the task_struct of the pid
+ * @param target_pid The target pid to find
+ * @return The task_struct of the pid, NULL if not found
+ */
+struct task_struct * getTaskStruct(unsigned short *target_pid) {
+  struct task_struct *task = current;
+  pid_t first = task->pid;
+  while(task->pid != *target_pid) {
+    task = list_entry(task->tasks.next, struct task_struct, tasks);
+    if(task->pid == first) {
+      return NULL;
+    }
   }
+  return task;
 }
 
-static void readSiblings(pid_t list[100], struct list_head *head) {
+/**
+ * Reads from the given list and puts the pids into the given list
+ * @param list The list to add the pids to 
+ * @param head The list_head that holds the list
+ */
+void readList(pid_t list[100], struct list_head *head) {
   struct list_head *position;
   int i = 0;
   list_for_each(position, head) {
@@ -42,6 +54,45 @@ static void readSiblings(pid_t list[100], struct list_head *head) {
   }
 }
 
+/**
+ * Reads the ancestors to the given task and puts them into the list
+ * @param list The list to add the pids to
+ * @param task The task to get the ancestors from
+ */
+void readAncestors(pid_t list[10], struct task_struct *task) {
+  int i = 0;
+  struct task_struct *parent = task;
+  for(i = 0; i < 10; i++) {
+    if(parent->parent) {
+      parent = parent->parent;
+      list[i] = parent->pid;
+    }
+  }
+}
+
+/**
+ * Prints out the given list
+ * @param list The pid_t list to print
+ * @param length The length of the list
+ * @param pid The pid of the process
+ * @param type The type of pid list to the proccess
+ */
+void printArray(pid_t *list, int length, unsigned short pid, char *type) {
+    int i;
+    for(i = 0; i < length; i++) {
+        if(list[i] != 0) {
+            printk("%s %15d is %s of %d\n", KERN_INFO, list[i], type, pid); 
+        }
+    }
+}
+
+/**
+ * Gets the ancestry data of the given pid and puts it into the given
+ * ancestry struct. Also prints out information to syslog
+ * @param target_pid The target pid to get information from
+ * @param response The ancestry struct ot put information into
+ * @returns 0 for success else errno error code
+ */
 asmlinkage long procAncestry(unsigned short *target_pid, struct ancestry *response) {
     int result = 0;
     unsigned short t_pid;
@@ -50,6 +101,7 @@ asmlinkage long procAncestry(unsigned short *target_pid, struct ancestry *respon
     struct list_head *children_list;
     struct list_head *siblings_list;
 
+    // Initalize data
     int i;
     for(i = 0; i < 10; i ++) {
         data.ancestors[i] = 0;
@@ -59,17 +111,29 @@ asmlinkage long procAncestry(unsigned short *target_pid, struct ancestry *respon
         data.siblings[i] = 0;
     }
 
+    // Get the target_pid
     if(copy_from_user(&t_pid, target_pid, sizeof(unsigned short))) {
       return EFAULT;
     }
-    task_data = current;
-    children_list = &current->children;
-    siblings_list = &current->sibling;
 
-    readChildren(data.children, children_list);
-    readSiblings(data.siblings, siblings_list);
+    // Get the task_struct
+    task_data = getTaskStruct(target_pid);
+    if(task_data == NULL) {
+      printk("%s PID:%d %s\n", KERN_INFO, *target_pid, "not found");
+      return ESRCH;
+    }
+    children_list = &task_data->children;
+    siblings_list = &task_data->sibling;
 
-    data.children[0] = 12345;
+    // Get ancestry data
+    readList(data.children, children_list);
+    readList(data.siblings, siblings_list);
+    readAncestors(data.ancestors, task_data);
+
+    printArray(data.ancestors, 10, *target_pid, "ancestor");
+    printArray(data.siblings, 100, *target_pid, "sibling");
+    printArray(data.children, 100, *target_pid, "child");
+
     if(copy_to_user(response, &data, sizeof(struct ancestry))) {
       return EFAULT;
     }
