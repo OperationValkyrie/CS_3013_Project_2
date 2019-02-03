@@ -1,13 +1,19 @@
+#include <asm/current.h>
+#include <asm/errno.h>
+//#include <asm-generic/uaccess.h>
 #include <linux/kernel.h>
+#include <linux/list.h>
 #include <linux/module.h>
+#include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/syscalls.h>
 
 unsigned long **sys_call_table;
 
 struct ancestry {
     pid_t ancestors[10];
-    pid_t siblings[100];
     pid_t children[100];
+    pid_t siblings[100];
 };
 
 asmlinkage long (*ref_sys_cs3013_syscall1)(void);
@@ -18,8 +24,55 @@ asmlinkage long new_sys_cs3013_syscall1(void) {
   return 0;
 }
 
+static void readChildren(pid_t list[100], struct list_head *head) {
+  struct list_head *position;
+  int i = 0;
+  list_for_each(position, head) {
+    struct task_struct *task = list_entry(position, struct task_struct, children);
+    list[i++] = task->pid;
+  }
+}
+
+static void readSiblings(pid_t list[100], struct list_head *head) {
+  struct list_head *position;
+  int i = 0;
+  list_for_each(position, head) {
+    struct task_struct *task = list_entry(position, struct task_struct, sibling);
+    list[i++] = task->pid;
+  }
+}
+
 asmlinkage long procAncestry(unsigned short *target_pid, struct ancestry *response) {
     int result = 0;
+    unsigned short t_pid;
+    struct ancestry data;
+    struct task_struct *task_data;
+    struct list_head *children_list;
+    struct list_head *siblings_list;
+
+    int i;
+    for(i = 0; i < 10; i ++) {
+        data.ancestors[i] = 0;
+    }
+    for(i = 0; i < 100; i++) {
+        data.children[i] = 0;
+        data.siblings[i] = 0;
+    }
+
+    if(copy_from_user(&t_pid, target_pid, sizeof(unsigned short))) {
+      return EFAULT;
+    }
+    task_data = current;
+    children_list = &current->children;
+    siblings_list = &current->sibling;
+
+    readChildren(data.children, children_list);
+    readSiblings(data.siblings, siblings_list);
+
+    data.children[0] = 12345;
+    if(copy_to_user(response, &data, sizeof(struct ancestry))) {
+      return EFAULT;
+    }
     return result;
 }
 

@@ -7,31 +7,54 @@
 
 #include "tester.h"
 
-struct ancestry {
-    pid_t ancestors[10];
-    pid_t siblings[100];
-    pid_t children[100];
-};
-
 #define __NR_procAncestry 378
 
 int main(int argc, char **argv) {
-    if(argc == 0) {
-        argc = 1;
-        sprintf(argv[0], "%d", getpid());
+    if(argc == 1) {
+        unsigned short pid = getpid();
+        printf("PID:%d %30s %ld\n", pid, "Return Code from procAncestry", getAncestry(pid));
     } else {
         int i;
-        for(i = 0; i < argc; i++) {
-            pid_t pid = atoi(argv[i]);
+        for(i = 1; i < argc; i++) {
+            unsigned short pid = atoi(argv[i]);
             printf("PID:%d %30s %ld\n", pid, "Return Code from procAncestry", getAncestry(pid));
         }
     }
     return 0;
 }
 
-long getAncestry(pid_t pid) {
+long getAncestry(unsigned short pid) {
     struct ancestry *data;
     data = malloc(sizeof(struct ancestry));
-    long result = syscall(__NR_procAncestry, pid, data);
+    clearAncestry(data);
+    printArray(data->ancestors, 10, pid, "Ancestor");
+    printArray(data->siblings, 100, pid, "Sibling");
+    printArray(data->children, 100, pid, "Children");
+    long result = syscall(__NR_procAncestry, &pid, data);
+    printArray(data->ancestors, 10, pid, "ancestor");
+    printArray(data->siblings, 100, pid, "sibling");
+    printArray(data->children, 100, pid, "child");
     return result;
+}
+
+void printArray(pid_t *list, int length, unsigned short pid, char *type) {
+    int i;
+    for(i = 0; i < length; i++) {
+        if(list[i] != 0) {
+            printf(" %15d is %s of %d\n", list[i], type, pid); 
+        }
+    }
+}
+
+void clearAncestry(struct ancestry *data) {
+    int i;
+    for(i = 0; i < 10; i ++) {
+        data->ancestors[i] = 0;
+    }
+    for(i = 0; i < 100; i++) {
+        data->children[i] = 0;
+    }
+    for(i = 0 ;i <100; i++) {
+        data->siblings[i] = 0;
+    }
 }
